@@ -1,0 +1,73 @@
+name: slim-build
+
+# Builds the slimmed-down fork (read/send/query MCP tools only).
+# Upstream's ci.yml is deliberately absent: it is gated on
+# `github.repository == 'Ujhhgtg/WeKit-Dev'` and therefore never runs in a fork.
+
+on:
+  push:
+    branches:
+      - master
+      - slim
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          NDK_VERSION=$(sed -n 's/^ndk = "\(.*\)"/\1/p' gradle/libs.versions.toml)
+          MIN_SDK=$(sed -n 's/^minSdk = "\(.*\)"/\1/p' gradle/libs.versions.toml)
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" > /dev/null
+          NDK_BIN="$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -x "$NDK_BIN/aarch64-linux-android$MIN_SDK-clang"
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: . -> target
+
+      - name: Grant execute permission
+        run: chmod +x gradlew x
+
+      # No WEKIT_KEYSTORE_* secrets are provided, so AGP falls back to the debug keystore:
+      # the APK is installable but not upstream-key-signed, which is fine for a personal build.
+      - name: Build release APK (standard flavor)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./x build --release --flavor standard
+
+      - name: List APKs
+        run: ls -l app/build/outputs/apk/standard/release/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wekit-slim-standard-release
+          path: app/build/outputs/apk/standard/release/*.apk
+          if-no-files-found: error
