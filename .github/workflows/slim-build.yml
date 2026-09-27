@@ -54,6 +54,12 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew x
 
+      # bindgen (via silk-v3-sys) needs the 32-bit glibc headers on the runner.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib
+
       # No WEKIT_KEYSTORE_* secrets are provided, so AGP falls back to the debug keystore:
       # the APK is installable but not upstream-key-signed, which is fine for a personal build.
       - name: Build release APK (standard flavor)
