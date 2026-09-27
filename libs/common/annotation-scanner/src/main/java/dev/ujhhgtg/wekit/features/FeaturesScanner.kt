@@ -25,9 +25,7 @@ import com.squareup.kotlinpoet.ksp.writeTo
 
 private const val PACKAGE_NAME = "dev.ujhhgtg.wekit"
 private const val FEATURES_CORE_PACKAGE = "$PACKAGE_NAME.features.core"
-private const val EXTENSIONS_PACKAGE = "$PACKAGE_NAME.extensions"
 private const val BASE_FEATURE = "$FEATURES_CORE_PACKAGE.BaseFeature"
-private const val EXTENSION_PACK = "$EXTENSIONS_PACKAGE.ExtensionPack"
 private const val RESOLVER_INTERFACE = "$PACKAGE_NAME.dexkit.abc.IResolveDex"
 
 class FeaturesKspProvider : SymbolProcessorProvider {
@@ -60,9 +58,6 @@ class FeaturesScanner(
         val features = objects
             .filter { it.isSubtypeOf(BASE_FEATURE) }
             .sortedBy { it.qualifiedName!!.asString() }
-        val extensionPacks = objects
-            .filter { it.isSubtypeOf(EXTENSION_PACK) }
-            .sortedBy { it.qualifiedName!!.asString() }
 
         if (features.isEmpty()) {
             logger.error("No BaseFeature objects were discovered in app sources")
@@ -70,7 +65,6 @@ class FeaturesScanner(
         }
         generateFeaturesProvider(features)
         generateDexResolutionRegistry(features.filter { it.isSubtypeOf(RESOLVER_INTERFACE) })
-        generateExtensionPacksProvider(extensionPacks)
         return emptyList()
     }
 
@@ -164,34 +158,6 @@ class FeaturesScanner(
         FileSpec.builder(FEATURES_CORE_PACKAGE, "DexResolutionTestRegistry")
             .addType(entryClass)
             .addType(registry)
-            .build()
-            .writeTo(codeGenerator, dependencies(symbols))
-    }
-
-    private fun generateExtensionPacksProvider(symbols: List<KSClassDeclaration>) {
-        val extensionPack = ClassName(EXTENSIONS_PACKAGE, "ExtensionPack")
-        val initializer = CodeBlock.builder().apply {
-            add("validateExtensionPacks(\n")
-            indent()
-            add("listOf(\n")
-            indent()
-            symbols.forEach { add("%T,\n", it.toClassName()) }
-            unindent()
-            add(").sortedWith(compareBy({ it.displayOrder }, { it.id })),\n")
-            unindent()
-            add(")")
-        }.build()
-        val provider = TypeSpec.objectBuilder("ExtensionPacksProvider")
-            .addProperty(
-                PropertySpec.builder(
-                    "ALL_PACKS",
-                    ClassName("kotlin.collections", "List").parameterizedBy(extensionPack),
-                ).initializer(initializer).build(),
-            )
-            .addKdoc("Auto-generated extension pack registry. Do not edit manually.\n")
-            .build()
-        FileSpec.builder(EXTENSIONS_PACKAGE, "ExtensionPacksProvider")
-            .addType(provider)
             .build()
             .writeTo(codeGenerator, dependencies(symbols))
     }
