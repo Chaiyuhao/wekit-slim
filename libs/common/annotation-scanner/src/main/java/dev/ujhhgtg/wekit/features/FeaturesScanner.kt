@@ -68,11 +68,6 @@ class FeaturesScanner(
             logger.error("No BaseFeature objects were discovered in app sources")
             return emptyList()
         }
-        if (extensionPacks.isEmpty()) {
-            logger.error("No ExtensionPack objects were discovered in app sources")
-            return emptyList()
-        }
-
         generateFeaturesProvider(features)
         generateDexResolutionRegistry(features.filter { it.isSubtypeOf(RESOLVER_INTERFACE) })
         generateExtensionPacksProvider(extensionPacks)
